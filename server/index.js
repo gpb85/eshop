@@ -1,19 +1,35 @@
-import bodyParser from "body-parser";
 import express from "express";
-import pool from "./config/pool.js";
+import bodyParser from "body-parser";
+import dotenv from "dotenv";
 
-import { dirname } from "path";
-import { fileURLToPath } from "url";
+import clientsRoutes from "./routes/clientRoutes.js";
+import authRoutes from "./routes/authRoutes.js";
+
+// Φόρτωση environment variables
+dotenv.config();
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
+// Middleware για parsing JSON και URL-encoded bodies
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
 
-app.get("/", async (req, res) => {
-  res.status(201).json({ success: true, message: "Everything ok" });
+// Test route
+app.get("/", (req, res) => {
+  res.status(200).json({ success: true, message: "Server is running" });
 });
 
-app.listen(port, () =>
-  console.log(`Server listening at http://localhost:${port}`)
-);
+// Routes
+app.use("/", clientsRoutes); // Client endpoints (register, login, edit, delete)
+app.use("/", authRoutes); // Refresh token, logout κλπ.
+
+// Error handling για routes που δεν υπάρχουν
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: "Route not found" });
+});
+
+// Εκκίνηση server
+app.listen(port, () => {
+  console.log(`Server listening at http://localhost:${port}`);
+});
