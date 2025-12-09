@@ -1,4 +1,0 @@
-0000000000000000000000000000000000000000 1b5c3ce894a899b471fc7dffcd75248cfc837670 GpB <giorgos_bithas@hotmail.com> 1765233089 +0200	commit (initial): commit
-1b5c3ce894a899b471fc7dffcd75248cfc837670 1b5c3ce894a899b471fc7dffcd75248cfc837670 GpB <giorgos_bithas@hotmail.com> 1765233105 +0200	Branch: renamed refs/heads/master to refs/heads/main
-1b5c3ce894a899b471fc7dffcd75248cfc837670 3e121f9d36e811bce330e6d0bfb34e10866307b1 GpB <giorgos_bithas@hotmail.com> 1765317597 +0200	commit: clients validation | roles permissions | middleware validate role auth | authController clientController
-3e121f9d36e811bce330e6d0bfb34e10866307b1 e61fb13a4e6a45eff21f95f160f7775f2ad2b84b GpB <giorgos_bithas@hotmail.com> 1765317641 +0200	commit: again
