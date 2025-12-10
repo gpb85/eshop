@@ -2,6 +2,7 @@ import pool from "../config/pool.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto-js";
+import nodemailer from "nodemailer";
 
 //admin login
 
