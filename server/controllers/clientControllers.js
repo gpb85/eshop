@@ -2,6 +2,7 @@ import pool from "../config/pool.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 
+// -------------------------- REGISTER CLIENT --------------------------
 export const registerClient = async (req, res) => {
   try {
     const { email, password, fullName } = req.body;
@@ -10,6 +11,7 @@ export const registerClient = async (req, res) => {
       `SELECT * FROM users WHERE email=$1`,
       [email]
     );
+
     if (existingClient.rowCount > 0) {
       return res
         .status(400)
@@ -19,7 +21,9 @@ export const registerClient = async (req, res) => {
     const password_hash = await bcrypt.hash(password, 10);
 
     const result = await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, role) VALUES ($1,$2,$3,$4) RETURNING id,email,full_name,role`,
+      `INSERT INTO users (email, password_hash, full_name, role)
+       VALUES ($1,$2,$3,$4)
+       RETURNING id,email,full_name,role`,
       [email, password_hash, fullName, "client"]
     );
 
@@ -34,9 +38,11 @@ export const registerClient = async (req, res) => {
   }
 };
 
+// -------------------------- LOGIN CLIENT --------------------------
 export const loginClient = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     const result = await pool.query(
       `SELECT * FROM users WHERE email=$1 AND role=$2`,
       [email, "client"]
@@ -49,6 +55,7 @@ export const loginClient = async (req, res) => {
         .json({ success: false, message: "Wrong email or password" });
 
     const validPassword = await bcrypt.compare(password, client.password_hash);
+
     if (!validPassword)
       return res
         .status(401)
@@ -65,6 +72,7 @@ export const loginClient = async (req, res) => {
       process.env.REFRESH_TOKEN_SECRET,
       { expiresIn: "7d" }
     );
+
     await pool.query(`UPDATE users SET refresh_token=$1 WHERE id=$2`, [
       refreshToken,
       client.id,
@@ -87,6 +95,7 @@ export const loginClient = async (req, res) => {
   }
 };
 
+// -------------------------- LOGOUT CLIENT --------------------------
 export const logoutClient = async (req, res) => {
   try {
     const clientId = req.user.id;
@@ -100,22 +109,90 @@ export const logoutClient = async (req, res) => {
   }
 };
 
+// -------------------------- EDIT CLIENT PROFILE --------------------------
 export const editProfile = async (req, res) => {
   try {
     const clientID = req.user.id;
-    const { fullName, email } = req.body;
-    const result = await pool.query(
-      `UPDATE users SET full_name=$1,email=$2 WHERE id=$3 RETURNING id,email,full_name`,
-      [fullName, email, clientID]
+    const { fullName, email, currentPassword, newPassword } = req.body;
+
+    // Fetch existing user
+    const userResult = await pool.query(
+      `SELECT * FROM users WHERE id=$1 AND role='client'`,
+      [clientID]
     );
-    if (!result.rows[0])
+
+    const client = userResult.rows[0];
+    if (!client)
       return res
         .status(404)
         .json({ success: false, message: "Client not found" });
 
+    // -------- Prevent empty update --------
+    if (!fullName && !email && !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "No changes provided to update profile",
+      });
+    }
+
+    // -------- Prevent duplicate email --------
+    if (email && email !== client.email) {
+      const existedEmail = await pool.query(
+        `SELECT id FROM users WHERE email=$1`,
+        [email]
+      );
+
+      if (existedEmail.rowCount > 0) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Email is already in use" });
+      }
+    }
+
+    // -------- Handle password change --------
+    let updatedPasswordHash = client.password_hash;
+
+    if (newPassword) {
+      if (!currentPassword) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "To change password you must provide currentPassword and newPassword",
+        });
+      }
+
+      const validPass = await bcrypt.compare(
+        currentPassword,
+        client.password_hash
+      );
+      if (!validPass) {
+        return res
+          .status(401)
+          .json({ success: false, message: "Current password is wrong" });
+      }
+
+      updatedPasswordHash = await bcrypt.hash(newPassword, 10);
+    }
+
+    // -------- Update user --------
+    const result = await pool.query(
+      `UPDATE users 
+       SET full_name=$1, email=$2, password_hash=$3
+       WHERE id=$4
+       RETURNING id, email, full_name, role`,
+      [
+        fullName || client.full_name,
+        email || client.email,
+        updatedPasswordHash,
+        clientID,
+      ]
+    );
+
     res.status(200).json({
       success: true,
-      message: "Profile updated successfully",
+      message: newPassword
+        ? "Profile & password updated successfully"
+        : "Profile updated successfully",
       updatedClient: result.rows[0],
     });
   } catch (error) {
@@ -124,13 +201,16 @@ export const editProfile = async (req, res) => {
   }
 };
 
+// -------------------------- DELETE CLIENT ACCOUNT --------------------------
 export const deleteProfile = async (req, res) => {
   try {
     const clientID = req.user.id;
+
     const result = await pool.query(
       `DELETE FROM users WHERE id=$1 RETURNING id`,
       [clientID]
     );
+
     if (!result.rows[0])
       return res
         .status(404)

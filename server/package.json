@@ -12,6 +12,7 @@
   "type": "module",
   "dependencies": {
     "body-parser": "^2.2.1",
+    "crypto-js": "^4.2.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "joi": "^18.0.2",

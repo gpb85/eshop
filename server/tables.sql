@@ -2,14 +2,18 @@
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
+    password_hash TEXT,                   -- Αρχικά μπορεί να είναι NULL για invited users
     full_name VARCHAR(255),
-    role VARCHAR(20) NOT NULL,          -- 'admin', 'user', 'client'
-    level INT,                           -- Ισχύει μόνο για admin
-    approved BOOLEAN DEFAULT FALSE,      -- Ισχύει μόνο για role = 'user'
-    loyalty_points INT DEFAULT 0,        -- Ισχύει μόνο για role = 'client'
-    created_at TIMESTAMP DEFAULT NOW()
+    role VARCHAR(20) NOT NULL,           -- 'admin', 'user', 'client'
+    level INT,                            -- Ισχύει μόνο για admin
+    approved BOOLEAN DEFAULT FALSE,       -- Ισχύει μόνο για role = 'user'
+    loyalty_points INT DEFAULT 0,         -- Ισχύει μόνο για role = 'client'
+    created_at TIMESTAMP DEFAULT NOW(),
+    refresh_token TEXT,                   -- Για login sessions
+    invite_token TEXT                     -- Για πρόσκληση/registration link
 );
+
+
 
 -- Products table
 CREATE TABLE products (

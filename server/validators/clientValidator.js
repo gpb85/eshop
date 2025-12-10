@@ -23,6 +23,14 @@ export const loginClientSchema = Joi.object({
 });
 
 export const editClientSchema = Joi.object({
-  email: Joi.string().email().required(),
-  fullName: Joi.string().min(3).max(50).required(),
-});
+  fullName: Joi.string().min(3).max(50).optional(),
+  email: Joi.string().email().optional(),
+
+  currentPassword: Joi.string().min(6).optional(),
+  newPassword: Joi.string().min(6).optional(),
+})
+  .or("fullName", "email", "newPassword") // πρέπει τουλάχιστον ένα πεδίο να αλλάζει
+  .with("newPassword", "currentPassword") // αν υπάρχει newPassword, πρέπει να υπάρχει και currentPassword
+  .messages({
+    "object.missing": "You must provide at least one field to update",
+  });

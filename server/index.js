@@ -2,6 +2,7 @@ import express from "express";
 import bodyParser from "body-parser";
 import dotenv from "dotenv";
 
+import adminRoutes from "./routes/adminRoutes.js";
 import clientsRoutes from "./routes/clientRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 
@@ -21,6 +22,7 @@ app.get("/", (req, res) => {
 });
 
 // Routes
+app.use("/", adminRoutes); //admin endpoints(login, edit)
 app.use("/", clientsRoutes); // Client endpoints (register, login, edit, delete)
 app.use("/", authRoutes); // Refresh token, logout κλπ.
 
