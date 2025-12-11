@@ -99,6 +99,8 @@ export const loginClient = async (req, res) => {
 export const logoutClient = async (req, res) => {
   try {
     const clientId = req.user.id;
+    console.log(clientId);
+
     await pool.query(`UPDATE users SET refresh_token=NULL WHERE id=$1`, [
       clientId,
     ]);

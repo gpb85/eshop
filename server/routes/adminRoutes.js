@@ -7,7 +7,8 @@ import {
   loginAdmin,
   logOutAdmin,
   editAdminProfile,
-} from "./../controllers/adminControllers";
+  registerAdmin,
+} from "./../controllers/adminControllers.js";
 
 import {
   inviteEmployeeSchema,
@@ -33,6 +34,10 @@ router.patch(
 
 //delete employee
 router.delete("/admin/deleteEmployee", deleteEmployee);
+
+//register admin
+
+router.post("/admin/register", registerAdmin);
 
 //sign in admin
 router.post("/admin/signin", validate(loginAdminSchema), loginAdmin);

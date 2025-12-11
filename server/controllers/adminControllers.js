@@ -266,7 +266,8 @@ export const logOutAdmin = async (req, res) => {
 export const editAdminProfile = async (req, res) => {
   try {
     const adminId = req.user.id;
-    const { full_name, currentPassword, newPassword } = req.body;
+    const { fullName, currentPassword, newPassword } = req.body;
+    console.log("body", req.body);
 
     const result = await pool.query(`SELECT * FROM users WHERE id=$1`, [
       adminId,
@@ -311,7 +312,7 @@ export const editAdminProfile = async (req, res) => {
       WHERE id=$3
       RETURNING id, email, role, full_name
       `,
-      [full_name || admin.full_name, updatedPasswordHash, adminId]
+      [fullName || admin.full_name, updatedPasswordHash, adminId]
     );
 
     res.status(200).json({
@@ -327,5 +328,36 @@ export const editAdminProfile = async (req, res) => {
       success: false,
       message: "Internal server error",
     });
+  }
+};
+
+export const registerAdmin = async (req, res) => {
+  try {
+    const { email, password, fullName } = req.body;
+    //console.log("body: ", req.body);
+
+    if (!email || !password || !fullName) {
+      return res
+        .status(404)
+        .json({ success: false, message: "email password fullname required" });
+    }
+    const password_hash = await bcrypt.hash(password, 10);
+    //console.log(password_hash);
+
+    const result = await pool.query(
+      `INSERT INTO users (email, password_hash, full_name, role, level, approved) 
+   VALUES ($1, $2, $3, $4, $5, $6)
+   RETURNING email, password_hash, full_name, role, level`,
+      [email, password_hash, fullName, "admin", 5, true]
+    );
+    res.status(201).json({
+      success: true,
+      message: "Admin registered successfully",
+      admin: result.rows[0],
+    });
+  } catch (error) {
+    res
+      .status(500)
+      .json({ success: false, message: `Server internal error ${error}` });
   }
 };

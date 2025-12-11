@@ -91,22 +91,41 @@ export const loginAdminSchema = Joi.object({
 // - newPassword (optional)
 
 export const editAdminSchema = Joi.object({
-  full_name: Joi.string().min(3).max(50).optional().messages({
-    "string.min": "Name must be at least 3 characters",
-    "string.max": "Name must be under 50 characters",
-  }),
+  fullName: Joi.string()
+    .trim()
+    .min(3)
+    .max(50)
+    .pattern(/^(?! )[A-Za-z\s]+(?<! )$/)
+    .allow("", null) // <-- αυτό επιτρέπει κενό string ή null
+    .optional()
+    .messages({
+      "string.min": "Full name must be at least 3 characters",
+      "string.max": "Full name must be under 50 characters",
+      "string.pattern.base":
+        "Full name can only contain letters and spaces, and cannot start or end with a space",
+    }),
 
-  currentPassword: Joi.string().optional(),
-  newPassword: Joi.string().min(6).optional().messages({
-    "string.min": "New password must be at least 6 characters",
-  }),
+  currentPassword: Joi.string().allow("", null).optional(),
+  newPassword: Joi.string()
+    .min(6)
+    .pattern(/^(?=.*[A-Za-z])(?=.*\d)(?=.*[@$!%*#?&])[A-Za-z\d@$!%*#?&]{6,}$/)
+    .allow("", null)
+    .optional()
+    .messages({
+      "string.min": "New password must be at least 6 characters",
+      "string.pattern.base":
+        "New password must include at least one letter, one number, and one special character",
+    }),
 })
-  // CUSTOM RULE → Αν υπάρχει newPassword πρέπει να υπάρχει currentPassword
   .custom((value, helpers) => {
-    if (value.newPassword && !value.currentPassword) {
+    // Αν υπάρχει νέο password, πρέπει να υπάρχει και currentPassword
+    if (
+      value.newPassword &&
+      value.newPassword !== "" &&
+      !value.currentPassword
+    ) {
       return helpers.error("any.custom", {
-        message:
-          "To change your password, you must provide currentPassword as well",
+        message: "To change your password, you must provide currentPassword",
       });
     }
     return value;
