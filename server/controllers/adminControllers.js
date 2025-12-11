@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 
-export const inviteUser = async (req, res) => {
+export const inviteEmployee = async (req, res) => {
   try {
     const { email, role, level } = req.body;
 
@@ -75,7 +75,8 @@ export const inviteUser = async (req, res) => {
 
 export const promoteEmployee = async (req, res) => {
   try {
-    const { id, role, level } = req.body;
+    const { role, level } = req.body;
+    const { id } = req.params;
 
     if (!id || !role) {
       return res.status(400).json({
@@ -152,9 +153,9 @@ export const promoteEmployee = async (req, res) => {
   }
 };
 
-export const deleteUser = async (req, res) => {
+export const deleteEmployee = async (req, res) => {
   try {
-    const { id } = req.body;
+    const { id } = req.params;
     const result = await pool.query(
       `DELETE from USERS WHERE id=$1 RETURNING id,email`,
       [id]
@@ -195,7 +196,7 @@ export const loginAdmin = async (req, res) => {
     if (!validPassword) {
       return res.status(401).json({
         success: false,
-        message: "Wrong email or password",
+        message: "Wrong password",
       });
     }
 

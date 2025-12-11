@@ -1,12 +1,17 @@
 import express from "express";
 
 import {
+  inviteEmployee,
+  promoteEmployee,
+  deleteEmployee,
   loginAdmin,
   logOutAdmin,
   editAdminProfile,
 } from "./../controllers/adminControllers";
 
 import {
+  inviteEmployeeSchema,
+  promoteEmployeeSchema,
   loginAdminSchema,
   editAdminSchema,
 } from "./../validators/adminValidator.js";
@@ -15,6 +20,19 @@ import { validate } from "../middleware/validate.js";
 import authMiddleware from "../middleware/authMiddleware.js";
 
 const router = express.Router();
+
+//invite employee
+router.post("/admin/reg-inv", validate(inviteEmployeeSchema), inviteEmployee);
+
+//promote employee
+router.patch(
+  "/admin/promote",
+  validate(promoteEmployeeSchema),
+  promoteEmployee
+);
+
+//delete employee
+router.delete("/admin/deleteEmployee", deleteEmployee);
 
 //sign in admin
 router.post("/admin/signin", validate(loginAdminSchema), loginAdmin);
