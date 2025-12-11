@@ -1,51 +1,179 @@
 import pool from "../config/pool.js";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import crypto from "crypto-js";
+import crypto from "crypto";
 import nodemailer from "nodemailer";
-
-//admin login
 
 export const inviteUser = async (req, res) => {
   try {
-    const { email } = req.body;
-    if (!email) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Email is required" });
+    const { email, role, level } = req.body;
+
+    if (!email || !role || level === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: "Email, role and level are required",
+      });
     }
 
-    //generate secure random token
+    // Έλεγχος έγκυρων roles
+    const validRoles = ["admin", "user"];
+    if (!validRoles.includes(role)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Role must be 'admin' or 'user'" });
+    }
+
+    // Έλεγχος για levels ανά role
+    if (role === "admin" && (level < 1 || level > 5)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Admin level must be 1-5" });
+    }
+    if (role === "user" && (level < 1 || level > 3)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "User level must be 1-3" });
+    }
+
+    // Δημιουργία secure token
     const inviteToken = crypto.randomBytes(32).toString("hex");
+
+    // Εισαγωγή στη βάση
     await pool.query(
-      `INSERT INTO users (email,role,approved,invite_token) VALUES($1,'user',false,$2)`,
-      [email, inviteToken]
+      `INSERT INTO users (email, role, level, invite_token, approved) VALUES ($1,$2,$3,$4,false) RETURNING id,email,role,level`,
+      [email, role, level, inviteToken]
     );
-    const registerLink = nodemailer.createTransport({
+
+    // Link για registration
+    const registerLink = `http://localhost:3000/register?token=${inviteToken}`;
+
+    // Nodemailer transporter
+    const transporter = nodemailer.createTransport({
       host: "smtp.example.com",
       port: 587,
-      secure: false, //true for port=465
-      auth: { user: "your_email_example.com", password: "your_email_password" },
+      secure: false,
+      auth: { user: "your_email@gmail.com", pass: "email_password" },
     });
 
+    // Αποστολή email
     await transporter.sendMail({
-      from: "'admin' <admin@example.com>",
+      from: '"Admin" <admin@example.com>',
       to: email,
       subject: "Register invitation",
       html: `<p>You have been invited to register</p>
-          <p>Click the link to complete registration: <a href=${registerLink}>${registerLink}</p>
-      `,
+       <p>Click <a href="${registerLink}">here</a> to complete your registration</p>`,
     });
 
     res
       .status(200)
       .json({ success: true, message: "Invitation sent successfully" });
   } catch (error) {
-    console.error("Error inviting user: ", error);
-    res.status(500).json({ success: false, message: "Invalid server error" });
+    console.error("Send invitation failed: ", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
 
+export const promoteEmployee = async (req, res) => {
+  try {
+    const { id, role, level } = req.body;
+
+    if (!id || !role) {
+      return res.status(400).json({
+        success: false,
+        message: "Id and role are required",
+      });
+    }
+
+    const validRoles = ["admin", "user"];
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        success: false,
+        message: "Role must be 'admin' or 'user'",
+      });
+    }
+
+    // Έλεγχος για έγκυρα επίπεδα ανά role
+    const maxLevel = role === "admin" ? 5 : 3;
+    const minLevel = 1;
+    if (
+      level === undefined ||
+      isNaN(level) ||
+      level < minLevel ||
+      level > maxLevel
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: `${role} level must be between ${minLevel} and ${maxLevel}`,
+      });
+    }
+
+    // Παίρνουμε τον τρέχοντα χρήστη
+    const current = await pool.query(
+      `SELECT role, level FROM users WHERE id=$1`,
+      [id]
+    );
+
+    if (current.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "User not found" });
+    }
+
+    const currentUser = current.rows[0];
+
+    // Απαγόρευση καθοδικής αλλαγής
+    if (role === currentUser.role && level <= currentUser.level) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot demote or keep same/lower level",
+      });
+    }
+
+    // Ενημέρωση χρήστη
+    const result = await pool.query(
+      `UPDATE users
+       SET role=$1, level=$2
+       WHERE id=$3
+       RETURNING id, email, role, level`,
+      [role, level, id]
+    );
+
+    res.status(200).json({
+      success: true,
+      message: "Employee promoted successfully",
+      promotedEmployee: result.rows[0],
+    });
+  } catch (error) {
+    console.error("promoteEmployee failed:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const deleteUser = async (req, res) => {
+  try {
+    const { id } = req.body;
+    const result = await pool.query(
+      `DELETE from USERS WHERE id=$1 RETURNING id,email`,
+      [id]
+    );
+    if (result.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "For admin, no user found" });
+    }
+    res
+      .status(200)
+      .json({ success: true, message: "User deleted successfully" });
+  } catch (error) {
+    console.error("Error admin delete user: ", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+//admin login
 export const loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
