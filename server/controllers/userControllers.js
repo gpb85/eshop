@@ -1,65 +1,7 @@
 import pool from "../config/pool.js";
 import bcrypt from "bcrypt";
+import { cp } from "fs";
 import jwt from "jsonwebtoken";
-
-export const registerUser = async (req, res) => {
-  try {
-    const inviteToken = req.query.token; //
-    const { fullName, password } = req.body;
-
-    if (!inviteToken) {
-      return res.status(400).json({
-        success: false,
-        message: "Missing invitation token",
-      });
-    }
-
-    // Βρίσκουμε το χρήστη με βάση το token
-    const result = await pool.query(
-      `SELECT * FROM users WHERE invite_token=$1 AND role='user'`,
-      [inviteToken]
-    );
-
-    const user = result.rows[0];
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "Invalid or expired invite token",
-      });
-    }
-
-    if (user.approved === true) {
-      return res.status(400).json({
-        success: false,
-        message: "User already completed registration",
-      });
-    }
-
-    // Hash password
-    const hash = await bcrypt.hash(password, 10);
-
-    const updateResult = await pool.query(
-      `UPDATE users
-       SET full_name = $1,
-           password_hash = $2,
-           approved = true,
-           invite_token = NULL
-       WHERE id=$3
-       RETURNING id, email, full_name, approved`,
-      [fullName, hash, user.id]
-    );
-
-    return res.status(200).json({
-      success: true,
-      message: "User successfully registered",
-      newUser: updateResult.rows[0],
-    });
-  } catch (error) {
-    console.error("Register user failed:", error);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-};
 
 export const loginUser = async (req, res) => {
   try {
@@ -170,7 +112,7 @@ export const logOutUser = async (req, res) => {
 
 export const editProfileUser = async (req, res) => {
   try {
-    const userId = req.user?.id;
+    const userId = req.user.id;
     if (!userId) {
       return res.status(401).json({
         success: false,

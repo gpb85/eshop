@@ -3,7 +3,8 @@ import bodyParser from "body-parser";
 import dotenv from "dotenv";
 
 import adminRoutes from "./routes/adminRoutes.js";
-import clientsRoutes from "./routes/clientRoutes.js";
+import userRoutes from "./routes/userRooutes.js";
+import clientRoutes from "./routes/clientRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 
 // Φόρτωση environment variables
@@ -18,12 +19,16 @@ app.use(express.json());
 
 // Test route
 app.get("/", (req, res) => {
-  res.status(200).json({ success: true, message: "Server is running" });
+  res.status(200).json({
+    success: true,
+    message: "our new funcy, old school eshop will be here soon..",
+  });
 });
 
 // Routes
 app.use("/", adminRoutes); //admin endpoints(login, edit)
-app.use("/", clientsRoutes); // Client endpoints (register, login, edit, delete)
+app.use("/", userRoutes); // user endpoints
+app.use("/", clientRoutes); // Client endpoints ()
 app.use("/", authRoutes); // Refresh token, logout κλπ.
 
 // Error handling για routes που δεν υπάρχουν

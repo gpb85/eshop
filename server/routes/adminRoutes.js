@@ -23,11 +23,15 @@ import authMiddleware from "../middleware/authMiddleware.js";
 const router = express.Router();
 
 //invite employee
-router.post("/admin/reg-inv", validate(inviteEmployeeSchema), inviteEmployee);
+router.post(
+  "/admin/invitation",
+  validate(inviteEmployeeSchema),
+  inviteEmployee
+);
 
 //promote employee
 router.patch(
-  "/admin/promote",
+  "/admin/promotion",
   validate(promoteEmployeeSchema),
   promoteEmployee
 );

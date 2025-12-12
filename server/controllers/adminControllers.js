@@ -3,19 +3,30 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import { info } from "console";
 
+// Middleware validation με Joi π.χ. inviteSchema
 export const inviteEmployee = async (req, res) => {
   try {
     const { email, role, level } = req.body;
 
-    if (!email || !role || level === undefined) {
+    // --- 1. Basic validation (ελέγχεται και από Joi middleware)
+    const cleanEmail = email.trim().toLowerCase();
+
+    // --- 2. Check if email already exists
+    const existingEmail = await pool.query(
+      `SELECT id, approved FROM users WHERE email=$1`,
+      [cleanEmail]
+    );
+
+    if (existingEmail.rowCount > 0) {
       return res.status(400).json({
         success: false,
-        message: "Email, role and level are required",
+        message: "Email already exists or invited",
       });
     }
 
-    // Έλεγχος έγκυρων roles
+    // --- 3. Role-level validation
     const validRoles = ["admin", "user"];
     if (!validRoles.includes(role)) {
       return res
@@ -23,7 +34,6 @@ export const inviteEmployee = async (req, res) => {
         .json({ success: false, message: "Role must be 'admin' or 'user'" });
     }
 
-    // Έλεγχος για levels ανά role
     if (role === "admin" && (level < 1 || level > 5)) {
       return res
         .status(400)
@@ -35,41 +45,60 @@ export const inviteEmployee = async (req, res) => {
         .json({ success: false, message: "User level must be 1-3" });
     }
 
-    // Δημιουργία secure token
+    // --- 4. Create secure invite token and hash it
     const inviteToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = await bcrypt.hash(inviteToken, 10);
+
+    // --- 5. Insert user in DB
+    const fixedPassword = "00000000";
+    const password_hash = await bcrypt.hash(fixedPassword, 10);
 
     // Εισαγωγή στη βάση
-    await pool.query(
-      `INSERT INTO users (email, role, level, invite_token, approved) VALUES ($1,$2,$3,$4,false) RETURNING id,email,role,level`,
-      [email, role, level, inviteToken]
+    const insertResult = await pool.query(
+      `INSERT INTO users (email, password_hash, role, level, approved,invite_token)
+       VALUES ($1,$2,$3,$4,true,$5)
+       RETURNING id, email, role, level`,
+      [cleanEmail, password_hash, role, level, tokenHash]
     );
 
-    // Link για registration
-    const registerLink = `http://localhost:3000/register?token=${inviteToken}`;
+    // --- 6. Create registration link
+    const registerLink = `http://localhost:3000/user/signin`;
 
-    // Nodemailer transporter
+    // --- 7. Send invitation email
     const transporter = nodemailer.createTransport({
-      host: "smtp.example.com",
-      port: 587,
-      secure: false,
-      auth: { user: "your_email@gmail.com", pass: "email_password" },
+      service: "gmail",
+      auth: {
+        user: process.env.USER_EMAIL,
+        pass: process.env.USER_PASSWORD,
+      },
     });
 
-    // Αποστολή email
-    await transporter.sendMail({
-      from: '"Admin" <admin@example.com>',
-      to: email,
-      subject: "Register invitation",
-      html: `<p>You have been invited to register</p>
-       <p>Click <a href="${registerLink}">here</a> to complete your registration</p>`,
-    });
+    const mailOptions = {
+      from: process.env.USER_EMAIL,
+      to: cleanEmail,
+      subject: "You are invited to register",
+      html: `
+        <p>You have been invited to register in the system.</p>
+        <p><strong>!!!Your password is -- 00000000 -- Dont forget to change!!!</strong></p>
+        <p>Click <a href="${registerLink}">here</a> to complete your registration.</p>
+      `,
+    };
 
-    res
-      .status(200)
-      .json({ success: true, message: "Invitation sent successfully" });
+    await transporter.sendMail(mailOptions); // await για να περιμένει την αποστολή
+    console.log("Email sent successfully to", cleanEmail);
+
+    // --- 8. Return success
+    return res.status(200).json({
+      success: true,
+      message: "Invitation sent successfully",
+      invitedUser: insertResult.rows[0],
+    });
   } catch (error) {
     console.error("Send invitation failed: ", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
 };
 
