@@ -3,7 +3,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import { info } from "console";
+import { generateSecurePassword } from "./../utils/helpers.js";
 
 // Middleware validation με Joi π.χ. inviteSchema
 export const inviteEmployee = async (req, res) => {
@@ -45,20 +45,17 @@ export const inviteEmployee = async (req, res) => {
         .json({ success: false, message: "User level must be 1-3" });
     }
 
-    // --- 4. Create secure invite token and hash it
-    const inviteToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = await bcrypt.hash(inviteToken, 10);
-
     // --- 5. Insert user in DB
-    const fixedPassword = "00000000";
+    const fixedPassword = generateSecurePassword();
+
     const password_hash = await bcrypt.hash(fixedPassword, 10);
 
     // Εισαγωγή στη βάση
     const insertResult = await pool.query(
-      `INSERT INTO users (email, password_hash, role, level, approved,invite_token)
-       VALUES ($1,$2,$3,$4,true,$5)
+      `INSERT INTO users (email, password_hash, role, level, approved)
+       VALUES ($1,$2,$3,$4,true)
        RETURNING id, email, role, level`,
-      [cleanEmail, password_hash, role, level, tokenHash]
+      [cleanEmail, password_hash, role, level]
     );
 
     // --- 6. Create registration link
@@ -78,8 +75,8 @@ export const inviteEmployee = async (req, res) => {
       to: cleanEmail,
       subject: "You are invited to register",
       html: `
-        <p>You have been invited to register in the system.</p>
-        <p><strong>!!!Your password is -- 00000000 -- Dont forget to change!!!</strong></p>
+        <p>You have been invited to register as  <strong>${role}</strong> in the system.</p>
+        <p><strong>!!!Your password is --${fixedPassword} -- Dont forget to change!!!</strong></p>
         <p>Click <a href="${registerLink}">here</a> to complete your registration.</p>
       `,
     };

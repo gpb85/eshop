@@ -1,6 +1,6 @@
 import pool from "../config/pool.js";
 import bcrypt from "bcrypt";
-import { cp } from "fs";
+
 import jwt from "jsonwebtoken";
 
 export const loginUser = async (req, res) => {

@@ -17,6 +17,8 @@ import authMiddleware from "./../middleware/authMiddleware.js";
 const router = express.Router();
 
 router.post("/user/signin", validate(loginUserSchema), loginUser);
+
+//edit profile
 router.patch(
   "/user/editprofile",
   authMiddleware,
