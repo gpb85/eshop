@@ -8,6 +8,7 @@ import clientRoutes from "./routes/clientRoutes.js";
 import authRoutes from "./routes/authRoutes.js";
 
 import productRoutes from "./routes/productRoutes.js";
+import orderRoutes from "./routes/orderRoutes.js";
 
 // Φόρτωση environment variables
 dotenv.config();
@@ -35,6 +36,9 @@ app.use("/", authRoutes); // Refresh token, logout κλπ.
 
 //products
 app.use("/", productRoutes);
+
+//orders
+app.use("/", orderRoutes);
 
 // Error handling για routes που δεν υπάρχουν
 app.use((req, res) => {

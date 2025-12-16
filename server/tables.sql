@@ -61,3 +61,23 @@ CREATE TABLE order_items (
     quantity INT NOT NULL,
     price NUMERIC(10,2) NOT NULL
 );
+
+--check is_active value
+
+CREATE OR REPLACE FUNCTION update_is_active()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.stock = 0 THEN
+    NEW.is_active := false;
+  ELSE
+    NEW.is_active := true;
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_products_stock
+BEFORE UPDATE ON products
+FOR EACH ROW
+WHEN (OLD.stock IS DISTINCT FROM NEW.stock)
+EXECUTE FUNCTION update_is_active();
