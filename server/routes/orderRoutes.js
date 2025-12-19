@@ -6,6 +6,8 @@ import {
   gerOrderById,
   cancelOrder,
   createOrder,
+  editOrder,
+  completeOrder,
 } from "./../controllers/orderControllers.js";
 
 const router = express.Router();
@@ -23,6 +25,20 @@ router.delete(
   authMiddleware,
   roleMiddleware("orders"),
   cancelOrder
+);
+
+// New routes for status transitions
+router.patch(
+  "/orders/:id/edit",
+  authMiddleware,
+  roleMiddleware("orders"),
+  editOrder
+);
+router.patch(
+  "/orders/:id/complete",
+  authMiddleware,
+  roleMiddleware("orders"),
+  completeOrder
 );
 
 export default router;

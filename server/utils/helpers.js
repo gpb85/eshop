@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import pool from "./../config/pool.js";
+import orderTransitions from "./orderTransitions.json";
 
 export const generateSecurePassword = () => {
   const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -37,4 +38,22 @@ export const generateSKU = async (name, category = "GEN") => {
   // Προσθέτουμε ένα τυχαίο 4-ψήφιο αριθμό
   const random = Math.floor(1000 + Math.random() * 900000);
   return `${cat}-${prod}-${random}`;
+};
+
+// order status helper
+
+export const canPerformAction = (currentStatus, action, role) => {
+  const statusObj = orderTransitions[currentStatus];
+  if (!statusObj) return false;
+  const actionObj = statusObj[action];
+  if (!actionObj) return false;
+  return actionObj.allowedRoles.includes(role);
+};
+
+const getNextStatus = (currentStatus, action) => {
+  const statusObj = orderTransitions[currentStatus];
+  if (!statusObj) return false;
+  const actionObj = statusObj[action];
+  if (!actionObj) return false;
+  return actionObj.nextStatus;
 };

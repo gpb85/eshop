@@ -1,4 +1,8 @@
 import pool from "./../config/pool.js";
+import {
+  canPerformAction,
+  getNextStatus,
+} from "./../utils/orderTransitions.js";
 
 /**Roles:
  *  admin:watch all, cancel all
@@ -182,6 +186,11 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Order not found" });
     }
     const order = orderResult.rows[0];
+    if (!canPerformAction(order.status, "cancel", role)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Forbidden or cannot cancel" });
+    }
 
     //ownership check
 
@@ -256,6 +265,12 @@ export const editOrder = async (req, res) => {
     }
 
     const order = orderResult.rows[0];
+
+    if (!canPerformAction(order.status, "edit", role)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Forbidden or order not editable" });
+    }
 
     // Έλεγχος status
     if (order.status !== "pending") {
@@ -346,6 +361,59 @@ export const editOrder = async (req, res) => {
     await connection.query("ROLLBACK");
     console.error("Edit order failed:", error);
     res.status(400).json({ success: false, message: error.message });
+  } finally {
+    connection.release();
+  }
+};
+
+export const completeOrder = async (req, res) => {
+  const { role } = req.user;
+  const { id: orderId } = req.params;
+
+  if (role !== "admin") {
+    return res
+      .status(403)
+      .json({ success: false, message: "Only admin can complete orders" });
+  }
+
+  const connection = await pool.connect();
+
+  try {
+    await connection.query("BEGIN");
+
+    const orderResult = await connection.query(
+      `SELECT * FROM orders WHERE id=$1 FOR UPDATE`,
+      [orderId]
+    );
+
+    if (orderResult.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+
+    const order = orderResult.rows[0];
+
+    if (!canPerformAction(order.status, "complete", role)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Cannot complete this order" });
+    }
+
+    await connection.query(`UPDATE orders SET status=$1 WHERE id=$2`, [
+      getNextStatus(order.status, "complete"),
+      orderId,
+    ]);
+
+    await connection.query("COMMIT");
+
+    res
+      .status(200)
+      .json({ success: true, message: "Order completed successfully" });
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    console.error("Complete order failed:", error);
+    res.status(500).json({ success: false, message: error.message });
   } finally {
     connection.release();
   }
