@@ -1,21 +1,54 @@
--- Users table (όλοι οι ρόλοι)
+-- =====================
+-- RESET
+-- =====================
+DROP TABLE IF EXISTS order_items CASCADE;
+DROP TABLE IF EXISTS orders CASCADE;
+DROP TABLE IF EXISTS products CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
+
+DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS order_status CASCADE;
+
+-- =====================
+-- ENUMS
+-- =====================
+CREATE TYPE user_role AS ENUM ('admin', 'user', 'client');
+CREATE TYPE order_status AS ENUM ('pending', 'completed', 'cancelled');
+
+-- =====================
+-- USERS
+-- =====================
 CREATE TABLE users (
     id BIGSERIAL PRIMARY KEY,
     email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT,                   -- Αρχικά μπορεί να είναι NULL για invited users
+    password_hash TEXT,
     full_name VARCHAR(255),
-    role VARCHAR(20) NOT NULL,           -- 'admin', 'user', 'client'
-    level INT,                            -- Ισχύει μόνο για admin
-    approved BOOLEAN DEFAULT FALSE,       -- Ισχύει μόνο για role = 'user'
-    loyalty_points INT DEFAULT 0,         -- Ισχύει μόνο για role = 'client'
+
+    role user_role NOT NULL,
+
+    level INT,
+    approved BOOLEAN DEFAULT FALSE,
+    loyalty_points INT DEFAULT 0,
+
+    refresh_token TEXT,
+    invite_token TEXT,
+
     created_at TIMESTAMP DEFAULT NOW(),
-    refresh_token TEXT,                   -- Για login sessions
-    invite_token TEXT                     -- Για πρόσκληση/registration link
+
+    CONSTRAINT admin_level_check CHECK (
+        role != 'admin' OR level IS NOT NULL
+    ),
+    CONSTRAINT user_approved_check CHECK (
+        role != 'user' OR approved IS NOT NULL
+    ),
+    CONSTRAINT client_loyalty_check CHECK (
+        role != 'client' OR loyalty_points IS NOT NULL
+    )
 );
 
-
-
--- Products table
+-- =====================
+-- PRODUCTS
+-- =====================
 CREATE TABLE products (
     id BIGSERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -28,6 +61,7 @@ CREATE TABLE products (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
+-- updated_at trigger
 CREATE OR REPLACE FUNCTION set_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -41,29 +75,7 @@ BEFORE UPDATE ON products
 FOR EACH ROW
 EXECUTE FUNCTION set_updated_at();
 
-
-
--- Orders table
-CREATE TABLE orders (
-    id BIGSERIAL PRIMARY KEY,
-    client_id BIGINT REFERENCES users(id),
-    total NUMERIC(10,2) NOT NULL,
-    status VARCHAR(50) DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT NOW(),
-    CONSTRAINT status_check CHECK (status IN ('pending','completed','cancelled'))
-);
-
--- Order Items table
-CREATE TABLE order_items (
-    id BIGSERIAL PRIMARY KEY,
-    order_id BIGINT REFERENCES orders(id) ON DELETE CASCADE,
-    product_id BIGINT REFERENCES products(id),
-    quantity INT NOT NULL,
-    price NUMERIC(10,2) NOT NULL
-);
-
---check is_active value
-
+-- stock -> is_active trigger
 CREATE OR REPLACE FUNCTION update_is_active()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -81,3 +93,41 @@ BEFORE UPDATE ON products
 FOR EACH ROW
 WHEN (OLD.stock IS DISTINCT FROM NEW.stock)
 EXECUTE FUNCTION update_is_active();
+
+-- =====================
+-- ORDERS
+-- =====================
+CREATE TABLE orders (
+    id BIGSERIAL PRIMARY KEY,
+
+    client_id BIGINT NOT NULL REFERENCES users(id),
+    seller_id BIGINT REFERENCES users(id),
+
+    total NUMERIC(10,2) NOT NULL CHECK (total >= 0),
+    status order_status DEFAULT 'pending',
+
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- =====================
+-- ORDER ITEMS
+-- =====================
+CREATE TABLE order_items (
+    id BIGSERIAL PRIMARY KEY,
+
+    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+    product_id BIGINT NOT NULL REFERENCES products(id),
+
+    quantity INT NOT NULL CHECK (quantity > 0),
+    price NUMERIC(10,2) NOT NULL CHECK (price >= 0),
+
+    UNIQUE (order_id, product_id)
+);
+
+-- =====================
+-- INDEXES
+-- =====================
+CREATE INDEX idx_orders_client_id ON orders(client_id);
+CREATE INDEX idx_orders_seller_id ON orders(seller_id);
+CREATE INDEX idx_orders_status ON orders(status);
+CREATE INDEX idx_order_items_order_id ON order_items(order_id);

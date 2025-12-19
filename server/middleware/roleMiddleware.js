@@ -1,16 +1,17 @@
-import permissions from "../utils/permissions.js";
+import permissions from "./../utils/permissions.js";
 
-const roleMiddleware = (action) => {
+const roleMiddleware = (resource) => {
   return (req, res, next) => {
-    const userRole = req.user.role; //the role should be upload from auth middleware
+    const { role } = req.user;
 
-    if (permissions[userRole] && permissions[userRole][action]) {
-      return next();
-    } else {
-      return res
-        .status(403)
-        .json({ message: "Forbidden.You do not have permission be here" });
+    if (!permissions[role] || !permissions[role][resource]) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden",
+      });
     }
+
+    next();
   };
 };
 

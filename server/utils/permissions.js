@@ -1,32 +1,23 @@
 const permissions = {
   admin: {
-    createOrder: false,
-    createSale: false,
-    manageSales: true,
-    manageOrders: true,
-    manageProducts: true,
-    manageUsers: true,
-    cancelSale: true,
+    orders: true, // admin μπορεί όλα τα orders
+    sales: true, // admin μπορεί όλα τα sales
+    users: true, // διαχείριση users
+    products: true, // διαχείριση products
   },
 
   user: {
-    createOrder: false,
-    createSale: true,
-    manageSales: true,
-    manageOrders: false,
-    manageProducts: false,
-    cancelSale: true,
+    orders: true, // βλέπει μόνο δικά του (controller αποφασίζει ownership)
+    sales: true, // δημιουργεί και βλέπει μόνο δικά του sales
+    users: false, // δεν μπορεί να διαχειριστεί users
+    products: false, // δεν μπορεί να διαχειριστεί products
   },
 
   client: {
-    createOrder: true,
-    viewOwnOrders: true,
-    cancelOrders: true,
-    createSale: false,
-    manageSales: false,
-    manageOrders: false,
-    manageProducts: false,
-    cancelSale: false,
+    orders: true, // βλέπει μόνο δικά του orders
+    sales: false, // δεν έχει πρόσβαση σε sales
+    users: false, // δεν μπορεί να διαχειριστεί users
+    products: false, // δεν μπορεί να διαχειριστεί products
   },
 };
 

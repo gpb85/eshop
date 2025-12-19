@@ -1,8 +1,236 @@
-import pool from "../config/pool.js";
+import pool from "./../config/pool.js";
+
+/**Roles:
+ *  admin:watch all, cancel all
+ * user:watch his seller_id
+ * client:watch his client_id
+ *
+ */
+
+//get all orders
+
+export const getOrders = async (req, res) => {
+  try {
+    const { role, id: userUId } = req.user;
+    const { status } = req.query;
+    console.log("role: ", req.user.role);
+
+    let query = `SELECT * FROM orders`;
+    const values = [];
+    const where = [];
+
+    if (role === "client") {
+      values.push(userUId);
+      where.push(`client_id=$${values.length}`);
+    }
+    if (role === "user") {
+      values.push(userUId);
+      where.push(`seller_id=$${values.length}`);
+    }
+    if (status) {
+      values.push(status);
+      where.push(`status=$${values.length}`);
+    }
+
+    if (where.length) {
+      query += " WHERE " + where.join(" AND "); // <-- Διορθώθηκε
+    }
+
+    query += ` ORDER BY created_at DESC`;
+
+    const result = await pool.query(query, values);
+
+    res.json({
+      success: true,
+      count: result.rowCount,
+      orders: result.rows,
+    });
+  } catch (error) {
+    console.error("Get orders error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
+
+//get order by id
+
+export const gerOrderById = async (req, res) => {
+  try {
+    const { id: userId, role } = req.user;
+    const { id: orderId } = req.params;
+
+    let query = `SELECT * FROM orders WHERE id=$1`;
+    const values = [orderId];
+    if (role === "client") {
+      query + ` AND client_id=$2`;
+      values.push(userId);
+    }
+    if (role === "user") {
+      query += ` AND seller_id=$2`;
+      values.push(userId);
+    }
+    const result = await pool.query(query, values);
+    if (result.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    res.json({
+      success: true,
+      order: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Get order error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
 
 export const createOrder = async (req, res) => {
-  const clientId = req.user.id;
-  const { items } = req.body;
+  const { id: userId, role } = req.user;
+  const { clientId, items } = req.body;
+  console.log("role", role);
+  console.log("client: ", clientId);
+
+  console.log("items:", items);
+
+  //client
+  const finalClientId = role === "client" ? userId : clientId;
+
+  //seller
+  const sellerId = role === "user" ? null : userId;
+
+  if (!finalClientId) {
+    return res
+      .status(400)
+      .json({ success: false, message: "Client is required" });
+  }
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res
+      .status(400)
+      .json({ success: false, messageL: "No items provided" });
+  }
+
+  const connection = await pool.connect();
+
+  try {
+    await connection.query("BEGIN");
+    let total = 0;
+    for (const item of items) {
+      const { rows, rowCount } = await connection.query(
+        `SELECT price,stock FROM products WHERE id=$1 AND is_active=true FOR UPDATE`,
+        [item.product_id]
+      );
+      if (!rowCount) {
+        throw new Error(`Product not available`);
+      }
+      if (item.quantity > rows[0].stock) {
+        throw new Error("Not enough stock ");
+      }
+      total += rows[0].price * item.quantity;
+    }
+    const orderResult = await connection.query(
+      `INSERT INTO orders(client_id,seller_id,total) VALUES($1,$2,$3) RETURNING*`,
+      [finalClientId, sellerId, total]
+    );
+    const order = orderResult.rows[0];
+    for (const item of items) {
+      const { rows } = await connection.query(
+        `SELECT price FROM products WHERE id=$1`,
+        [item.product_id]
+      );
+      await connection.query(
+        `INSERT INTO order_items (order_id,product_id,quantity,price) VALUES($1,$2,$3,$4) RETURNING*`,
+        [order.id, item.product_id, item.quantity, rows[0].price]
+      );
+      await connection.query(`UPDATE products SET stock=stock-$1 WHERE id=$2`, [
+        item.quantity,
+        item.product_id,
+      ]);
+    }
+    await connection.query("COMMIT");
+    res.status(201).json({
+      success: true,
+      message: "Order created successfully",
+      orderId: order.id,
+      total,
+    });
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    console.error("Create order failed:", error);
+
+    res.status(400).json({
+      message: error.message,
+    });
+  } finally {
+    connection.release();
+  }
+};
+
+export const cancelOrder = async (req, res) => {
+  const { id: userId, role } = req.user;
+  const { id: orderId } = req.params;
+
+  const connection = await pool.connect();
+  try {
+    await connection("BEGIN");
+    const orderResult = await connection.query(
+      `SELECT * FROM orders WHERE id=$1`,
+      [orderId]
+    );
+    if (orderResult.rowCount === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Order not found" });
+    }
+    const order = orderResult.rows[0];
+
+    //ownership check
+
+    if (role === "client" && order.cliend_id !== userId) {
+      await connection.query("ROLLBACK");
+      return res.status(403).json({ success: false, message: "forbidden" });
+    }
+    if (role === "user" && order.selle_id !== userId) {
+      await connection.query("ROLLBACK");
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+    if (order.status !== "pending") {
+      await connection.query("ROLLBACK");
+      return res.status(400).json({
+        success: false,
+        message: "Only pending orders can be cancelled",
+      });
+    }
+    //return stock
+    const itemsResult = await connection.query(
+      `SELECT * FROM order_items WHERE id=$1`,
+      [orderId]
+    );
+    for (const item of itemsResult.rows) {
+      await connection.query(
+        `UPDATE products SET stock=stock +$1 WHERE id=$2`,
+        [item.quantity, item.product_id]
+      );
+    }
+    await connection.query(`UPDATE orders SET status='cancelled' WHERE id=$1`, [
+      orderId,
+    ]);
+    await connection.query("COMMIT");
+    res
+      .status(200)
+      .json({ success: true, message: "Order cancelled successfully" });
+  } catch (error) {
+    await connection.query("ROLLBACK");
+    console.error("Cancel order error:", error);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  } finally {
+    connection.release();
+  }
+};
+
+export const editOrder = async (req, res) => {
+  const { id: userId, role } = req.user;
+  const { id: orderId } = req.params;
+  const { items } = req.body; // [{ product_id, quantity }]
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res
@@ -15,182 +243,94 @@ export const createOrder = async (req, res) => {
   try {
     await connection.query("BEGIN");
 
-    let total = 0;
-
-    // 1️⃣ Έλεγχος & υπολογισμός
-    for (const item of items) {
-      const productResult = await connection.query(
-        `SELECT * FROM products WHERE id=$1 AND is_active=true`,
-        [item.product_id]
-      );
-
-      if (productResult.rowCount === 0) {
-        throw new Error(`Product ${item.product_id} not found or inactive`);
-      }
-
-      const product = productResult.rows[0];
-      const quantity = parseInt(item.quantity);
-
-      if (quantity > product.stock) {
-        throw new Error(`Product ${product.name} is out of stock`);
-      }
-
-      total += parseFloat(product.price) * quantity;
-    }
-
-    // 2️⃣ στρογγυλοποίηση ΜΙΑ ΦΟΡΑ
-    total = Math.round(total * 100) / 100;
-
-    // 3️⃣ δημιουργία order
+    // Φόρτωση order με κλείδωμα για update
     const orderResult = await connection.query(
-      `INSERT INTO orders (client_id, total) VALUES ($1,$2) RETURNING *`,
-      [clientId, total]
-    );
-    const order = orderResult.rows[0];
-
-    // 4️⃣ order_items + stock
-    for (const item of items) {
-      const productResult = await connection.query(
-        `SELECT * FROM products WHERE id=$1`,
-        [item.product_id]
-      );
-
-      const product = productResult.rows[0];
-      const quantity = parseInt(item.quantity);
-      const newStock = product.stock - quantity;
-
-      await connection.query(
-        `INSERT INTO order_items (order_id, product_id, quantity, price)
-         VALUES ($1,$2,$3,$4)`,
-        [order.id, product.id, quantity, product.price]
-      );
-
-      await connection.query(
-        `UPDATE products 
-         SET stock=$1, is_active=$2
-         WHERE id=$3`,
-        [newStock, newStock === 0 ? false : true, product.id]
-      );
-    }
-
-    await connection.query("COMMIT");
-
-    res.status(201).json({
-      success: true,
-      message: "Order created successfully",
-      orderId: order.id,
-      total,
-    });
-  } catch (error) {
-    await connection.query("ROLLBACK");
-    res.status(400).json({ success: false, message: error.message });
-  } finally {
-    connection.release();
-  }
-};
-
-export const getAllOrders = async (req, res) => {
-  try {
-    const clientId = req.user.id;
-    const { status } = req.query;
-
-    let query = `SELECT * FROM orders WHERE client_id = $1`;
-    let values = [clientId];
-
-    if (status) {
-      query += ` AND status = $2`;
-      values.push(status);
-    }
-
-    query += ` ORDER BY created_at DESC`;
-
-    const result = await pool.query(query, values);
-
-    return res.status(200).json({
-      success: true,
-      count: result.rowCount,
-      orders: result.rows,
-    });
-  } catch (error) {
-    console.error("Get client orders error:", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
-
-export const getOrderById = async (req, res) => {
-  try {
-    const { id: orderId } = req.params;
-    const clientId = req.user.id;
-
-    const orderResult = await pool.query(
-      `SELECT * FROM orders WHERE id=$1 AND client_id=$2`,
-      [orderId, clientId]
+      `SELECT * FROM orders WHERE id=$1 FOR UPDATE`,
+      [orderId]
     );
 
-    if (orderResult.rowCount === 0) {
-      return res.status(404).json({
-        success: false,
-        message: "No order found for this client",
-      });
-    }
-
-    const order = orderResult.rows[0];
-
-    res.status(200).json({
-      success: true,
-      message: "Order found successfully",
-      order,
-    });
-  } catch (error) {
-    console.error("Error loading order: ", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
-  }
-};
-
-export const cancelOrder = async (req, res) => {
-  const clientId = req.user.id;
-  const { id: orderId } = req.params;
-
-  const connection = await pool.connect();
-
-  try {
-    await connection.query("BEGIN");
-
-    // Έλεγχος παραγγελίας
-    const orderResult = await connection.query(
-      `SELECT * FROM orders WHERE id=$1 AND client_id=$2`,
-      [orderId, clientId]
-    );
     if (orderResult.rowCount === 0) {
       return res
         .status(404)
-        .json({ success: false, message: "Order not found for this client" });
+        .json({ success: false, message: "Order not found" });
     }
+
     const order = orderResult.rows[0];
 
     // Έλεγχος status
     if (order.status !== "pending") {
       return res.status(400).json({
         success: false,
-        message: "Only pending orders can be cancelled",
+        message: "Only pending orders can be edited",
       });
     }
 
-    // Επιστροφή stock και ενεργοποίηση προϊόντων
-    const orderItemsResult = await connection.query(
-      `SELECT * FROM order_items WHERE order_id=$1`,
+    // Έλεγχος ownership για client και user
+    if (role === "client" && order.client_id !== userId) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+    if (role === "user" && order.seller_id !== userId) {
+      return res.status(403).json({ success: false, message: "Forbidden" });
+    }
+
+    // Φόρτωση υπάρχοντων items
+    const existingItemsResult = await connection.query(
+      `SELECT * FROM order_items WHERE order_id=$1 FOR UPDATE`,
       [orderId]
     );
+    const existingItems = existingItemsResult.rows;
 
-    for (const item of orderItemsResult.rows) {
+    // Επιστροφή stock των παλιών προϊόντων
+    for (const item of existingItems) {
       await connection.query(
-        `UPDATE products SET stock=stock+$1, is_active=true WHERE id=$2`,
+        `UPDATE products SET stock = stock + $1 WHERE id=$2`,
         [item.quantity, item.product_id]
       );
     }
 
-    // Αλλαγή status σε cancelled
-    await connection.query(`UPDATE orders SET status='cancelled' WHERE id=$1`, [
+    // Διαγραφή παλιών order_items
+    await connection.query(`DELETE FROM order_items WHERE order_id=$1`, [
+      orderId,
+    ]);
+
+    // Υπολογισμός νέου total και ενημέρωση stock
+    let total = 0;
+    for (const item of items) {
+      const productResult = await connection.query(
+        `SELECT price, stock FROM products WHERE id=$1 FOR UPDATE`,
+        [item.product_id]
+      );
+
+      if (productResult.rowCount === 0) {
+        throw new Error(`Product ${item.product_id} not found`);
+      }
+
+      const product = productResult.rows[0];
+      const quantity = parseInt(item.quantity);
+
+      if (quantity > product.stock) {
+        throw new Error(`Not enough stock for product ${item.product_id}`);
+      }
+
+      total += product.price * quantity;
+
+      // Εισαγωγή νέου order_item
+      await connection.query(
+        `INSERT INTO order_items (order_id, product_id, quantity, price)
+         VALUES ($1, $2, $3, $4)`,
+        [orderId, item.product_id, quantity, product.price]
+      );
+
+      // Μείωση stock
+      await connection.query(
+        `UPDATE products SET stock = stock - $1 WHERE id=$2`,
+        [quantity, item.product_id]
+      );
+    }
+
+    // Ενημέρωση συνολικού ποσού
+    await connection.query(`UPDATE orders SET total=$1 WHERE id=$2`, [
+      total,
       orderId,
     ]);
 
@@ -198,12 +338,14 @@ export const cancelOrder = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Order cancelled successfully and stock returned",
+      message: "Order updated successfully",
+      orderId,
+      total,
     });
   } catch (error) {
     await connection.query("ROLLBACK");
-    console.error("Order cancel failed: ", error);
-    res.status(500).json({ success: false, message: "Internal server error" });
+    console.error("Edit order failed:", error);
+    res.status(400).json({ success: false, message: error.message });
   } finally {
     connection.release();
   }
