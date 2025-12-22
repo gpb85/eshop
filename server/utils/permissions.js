@@ -10,7 +10,7 @@ const permissions = {
     orders: true, // βλέπει μόνο δικά του (controller αποφασίζει ownership)
     sales: true, // δημιουργεί και βλέπει μόνο δικά του sales
     users: false, // δεν μπορεί να διαχειριστεί users
-    products: false, // δεν μπορεί να διαχειριστεί products
+    products: true, // δεν μπορεί να διαχειριστεί products
   },
 
   client: {

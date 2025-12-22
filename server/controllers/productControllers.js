@@ -58,6 +58,15 @@ export const getProductById = async (req, res) => {
 
 // add Product
 export const addProduct = async (req, res) => {
+  const { id: userId, role } = req.user;
+  console.log(role);
+
+  if (role !== "admin") {
+    return res
+      .status(400)
+      .json({ success: false, message: "Only admin can add" });
+  }
+
   try {
     let { name, sku, description, price, stock, category } = req.body;
 
@@ -156,6 +165,12 @@ export const editProduct = async (req, res) => {
 
 export const deleteProduct = async (req, res) => {
   try {
+    const { id: userId, role } = req.user;
+    if (role !== "admin") {
+      return res
+        .status(400)
+        .json({ success: false, message: "Only admin can delete" });
+    }
     const { id } = req.params;
     const existing = await pool.query(`SELECT * FROM products WHERE id=$1`, [
       id,

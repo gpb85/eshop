@@ -13,6 +13,7 @@ import {
 } from "./../validators/productValidator.js";
 import { validate } from "./../middleware/validate.js";
 import authMiddleware from "./../middleware/authMiddleware.js";
+import roleMiddleware from "./../middleware/roleMiddleware.js";
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.get("/products/:id", getProductById);
 router.post(
   "/products",
   authMiddleware,
+  roleMiddleware("products"),
   validate(addProductSchema),
   addProduct
 );
@@ -34,11 +36,17 @@ router.post(
 router.patch(
   "/products/:id",
   authMiddleware,
+  roleMiddleware("products"),
   validate(editProductSchema),
   editProduct
 );
 
 // Delete product
-router.delete("/products/:id", authMiddleware, deleteProduct);
+router.delete(
+  "/products/:id",
+  authMiddleware,
+  roleMiddleware("products"),
+  deleteProduct
+);
 
 export default router;

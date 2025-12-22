@@ -200,6 +200,24 @@ export const deleteEmployee = async (req, res) => {
   }
 };
 
+export const getAllEmployees = async (req, res) => {
+  try {
+    const { id: adminId, role } = req.user;
+    console.log("adminId", adminId);
+
+    const result = await pool.query(`SELECT * FROM users WHERE role='user'`);
+    if (result.rowCount === 0) {
+      return res.status(400).json({ success: false, message: "No users" });
+    }
+    const users = result.rows;
+    res
+      .status(200)
+      .json({ success: true, message: "Users fetched successfylly", users });
+  } catch (error) {
+    console.error("Failed fetch users: ", error);
+  }
+};
+
 //admin login
 export const loginAdmin = async (req, res) => {
   try {

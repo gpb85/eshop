@@ -2,3 +2,4 @@ node_modules/
 .env
 tables.sql/
 .git-backup/
+text.txt/

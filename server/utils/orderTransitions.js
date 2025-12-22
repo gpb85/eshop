@@ -2,45 +2,47 @@ export const orderTransitions = {
   pending: {
     edit: {
       nextStatus: "pending",
-      allowdRoles: ["admin", "user", "client"],
+      allowedRoles: ["admin", "user", "client"],
     },
     cancel: {
-      cancel: {
-        nextStatus: "cancelled",
-        allowdRoles: ["client", "user", "admin"],
-      },
+      nextStatus: "cancelled",
+      allowedRoles: ["admin", "user", "client"],
     },
     complete: {
-      complete: {
-        nextStatus: "completed",
-        allowdRoles: ["admin"],
-      },
+      nextStatus: "completed",
+      allowedRoles: ["admin"],
     },
-    completed: {
-      edit: { nextStatus: null, allowdRoles: [] },
-      cancel: { nextStatus: null, allowdRoles: [] },
-      complete: { nextStatus: null, allowdRoles: [] },
-    },
-    cancelled: {
-      edit: { nextStatus: null, allowdRoles: [] },
-      complete: { nextStatus: null, allowdRoles: [] },
-      cancel: { nextStatus: null, allowdRoles: [] },
-    },
+  },
+
+  completed: {
+    edit: { nextStatus: null, allowedRoles: [] },
+    cancel: { nextStatus: null, allowedRoles: [] },
+    complete: { nextStatus: null, allowedRoles: [] },
+  },
+
+  cancelled: {
+    edit: { nextStatus: null, allowedRoles: [] },
+    cancel: { nextStatus: null, allowedRoles: [] },
+    complete: { nextStatus: null, allowedRoles: [] },
   },
 };
 
 export const canPerformAction = (currentStatus, action, role) => {
   const statusObj = orderTransitions[currentStatus];
   if (!statusObj) return false;
+
   const actionObj = statusObj[action];
   if (!actionObj) return false;
-  return actionObj.allowdRoles.includes(role);
+
+  return actionObj.allowedRoles.includes(role);
 };
 
 export const getNextStatus = (currentStatus, action) => {
   const statusObj = orderTransitions[currentStatus];
-  if (!statusObj) return false;
-  const actionObj = statusObj(action);
-  if (!actionObj) return false;
+  if (!statusObj) return null;
+
+  const actionObj = statusObj[action];
+  if (!actionObj) return null;
+
   return actionObj.nextStatus;
 };

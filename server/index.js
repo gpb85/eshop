@@ -47,5 +47,5 @@ app.use((req, res) => {
 
 // Εκκίνηση server
 app.listen(port, () => {
-  console.log(`Server listening at http://localhost:${port}`);
+  console.log(`Server is listening at 0.0.0.0:${port}`);
 });

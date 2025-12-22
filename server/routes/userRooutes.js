@@ -3,6 +3,7 @@ import {
   loginUser,
   editProfileUser,
   logOutUser,
+  deleteUser,
 } from "./../controllers/userControllers.js";
 
 import {
@@ -26,5 +27,5 @@ router.patch(
   editProfileUser
 );
 router.post("/user/logout", authMiddleware, logOutUser);
-
+router.delete("/user/:id", authMiddleware, deleteUser);
 export default router;

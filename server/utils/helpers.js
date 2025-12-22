@@ -1,6 +1,6 @@
 import crypto from "crypto";
 import pool from "./../config/pool.js";
-import orderTransitions from "./orderTransitions.json";
+import { orderTransitions } from "./orderTransitions.js";
 
 export const generateSecurePassword = () => {
   const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -41,19 +41,3 @@ export const generateSKU = async (name, category = "GEN") => {
 };
 
 // order status helper
-
-export const canPerformAction = (currentStatus, action, role) => {
-  const statusObj = orderTransitions[currentStatus];
-  if (!statusObj) return false;
-  const actionObj = statusObj[action];
-  if (!actionObj) return false;
-  return actionObj.allowedRoles.includes(role);
-};
-
-const getNextStatus = (currentStatus, action) => {
-  const statusObj = orderTransitions[currentStatus];
-  if (!statusObj) return false;
-  const actionObj = statusObj[action];
-  if (!actionObj) return false;
-  return actionObj.nextStatus;
-};

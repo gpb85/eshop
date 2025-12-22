@@ -16,6 +16,8 @@ import {
 export const getOrders = async (req, res) => {
   try {
     const { role, id: userUId } = req.user;
+    console.log("active-role: ", role);
+
     const { status } = req.query;
     console.log("role: ", req.user.role);
 
@@ -91,6 +93,8 @@ export const gerOrderById = async (req, res) => {
 export const createOrder = async (req, res) => {
   const { id: userId, role } = req.user;
   const { clientId, items } = req.body;
+  console.log("sellerId: ", userId);
+
   console.log("role", role);
   console.log("client: ", clientId);
 
@@ -100,7 +104,7 @@ export const createOrder = async (req, res) => {
   const finalClientId = role === "client" ? userId : clientId;
 
   //seller
-  const sellerId = role === "user" ? null : userId;
+  const sellerId = role === "user" ? userId : null;
 
   if (!finalClientId) {
     return res
@@ -124,7 +128,7 @@ export const createOrder = async (req, res) => {
         [item.product_id]
       );
       if (!rowCount) {
-        throw new Error(`Product not available`);
+        throw new Error(`Product ${item.product_id} not available`);
       }
       if (item.quantity > rows[0].stock) {
         throw new Error("Not enough stock ");
@@ -172,10 +176,11 @@ export const createOrder = async (req, res) => {
 export const cancelOrder = async (req, res) => {
   const { id: userId, role } = req.user;
   const { id: orderId } = req.params;
+  //console.log(userId, role, orderId);
 
   const connection = await pool.connect();
   try {
-    await connection("BEGIN");
+    await connection.query("BEGIN");
     const orderResult = await connection.query(
       `SELECT * FROM orders WHERE id=$1`,
       [orderId]
@@ -186,6 +191,7 @@ export const cancelOrder = async (req, res) => {
         .json({ success: false, message: "Order not found" });
     }
     const order = orderResult.rows[0];
+
     if (!canPerformAction(order.status, "cancel", role)) {
       return res
         .status(403)
@@ -198,7 +204,7 @@ export const cancelOrder = async (req, res) => {
       await connection.query("ROLLBACK");
       return res.status(403).json({ success: false, message: "forbidden" });
     }
-    if (role === "user" && order.selle_id !== userId) {
+    if (role === "user" && order.seller_id !== userId) {
       await connection.query("ROLLBACK");
       return res.status(403).json({ success: false, message: "Forbidden" });
     }
@@ -239,7 +245,9 @@ export const cancelOrder = async (req, res) => {
 export const editOrder = async (req, res) => {
   const { id: userId, role } = req.user;
   const { id: orderId } = req.params;
+
   const { items } = req.body; // [{ product_id, quantity }]
+  console.log(role);
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res
